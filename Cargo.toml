@@ -1,0 +1,21 @@
+[package]
+name = "wav-to-flac"
+description = "CLI tool to convert WAV files to FLAC"
+version = "0.1.0"
+authors = ["Pierre Dal-Pra <dalpra.pierre@gmail.com>"]
+categories = ["cli"]
+edition = "2018"
+license = "MIT"
+
+[dependencies]
+executors         = "0.6.0"
+flac-bound        = "0.1.0"
+hound             = "3.4.0"
+indicatif         = "0.14.0"
+log               = "0.4.8"
+metaflac          = "0.2.2"
+num_cpus          = "1.12.0"
+pathdiff          = "0.1.0"
+pretty_env_logger = "0.4.0"
+structopt         = "0.3.11"
+walkdir           = "2.3.1"
