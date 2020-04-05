@@ -1,5 +1,5 @@
-use crate::errors::Result;
 use crate::tagging;
+use anyhow::*;
 use flac_bound::{FlacEncoder, FlacEncoderConfig};
 use hound::{WavReader, WavSpec};
 use std::fs;
@@ -39,8 +39,10 @@ impl Job {
 
     fn flac_encode(&self, spec: &WavSpec, samples: &[i32], compression: u8) -> Result<()> {
         let nb_channels = spec.channels;
-        let encoder = FlacEncoder::new().expect("Failed to create a FLAC encoder");
-        let mut encoder = Self::configure_encoder(encoder, &spec, compression).init_file(&self.target_file)?;
+        let encoder = FlacEncoder::new().ok_or(anyhow!("Failed to create a FLAC encoder"))?;
+        let mut encoder = Self::configure_encoder(encoder, &spec, compression)
+            .init_file(&self.target_file)
+            .map_err(|err| anyhow!("Error while initializing encoder: {:?}", err))?;
 
         let mut channels: Vec<Vec<i32>> = vec![Vec::new(); nb_channels as usize];
         for (index, sample) in samples.iter().enumerate() {
@@ -49,8 +51,13 @@ impl Job {
         let mut channel_slices = Vec::with_capacity(nb_channels as usize);
         channels.iter().for_each(|channel| channel_slices.push(&channel[..]));
 
-        (&mut encoder).process(&channel_slices).map_err(|_| encoder.state())?;
-        encoder.finish().map_err(|encoder| encoder.state())?;
+        (&mut encoder)
+            .process(&channel_slices)
+            .map_err(|_| anyhow!("Error during FLAC encoding: {:?}", encoder.state()))?;
+
+        encoder
+            .finish()
+            .map_err(|encoder| anyhow!("Failed to finish FLAC encoding: {:?}", encoder.state()))?;
         Ok(())
     }
 

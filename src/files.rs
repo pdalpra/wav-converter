@@ -3,7 +3,8 @@ use std::{error::Error, fs::File, io, path::PathBuf};
 use log::{debug, log_enabled, Level};
 
 use crate::encoding::Job;
-use crate::errors::partition_result;
+use std::fmt::Debug;
+use std::iter::FromIterator;
 
 pub fn find_files_to_encode(src: &PathBuf, dest: &PathBuf) -> Vec<Job> {
     let file_walker = walkdir::WalkDir::new(src).follow_links(true);
@@ -46,4 +47,18 @@ fn log_errors_if_any(errors: Vec<impl Error>) {
             debug!("Ignoring file, cause: {}", error)
         }
     }
+}
+
+fn partition_result<I, T, E, Successes, Errors>(iterable: I) -> (Successes, Errors)
+where
+    I: IntoIterator<Item = std::result::Result<T, E>>,
+    T: Debug,
+    E: Debug,
+    Successes: FromIterator<T>,
+    Errors: FromIterator<E>,
+{
+    let (successes, failures): (Vec<_>, Vec<_>) = iterable.into_iter().partition(|e| e.is_ok());
+    let successes = successes.into_iter().map(std::result::Result::unwrap).collect();
+    let failures = failures.into_iter().map(std::result::Result::unwrap_err).collect();
+    (successes, failures)
 }

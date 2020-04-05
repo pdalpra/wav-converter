@@ -1,4 +1,4 @@
-use crate::errors::{Result, WavToFlacError};
+use anyhow::*;
 use metaflac::Tag;
 use std::path::PathBuf;
 
@@ -22,14 +22,13 @@ pub fn tag_file(target_file: &PathBuf) -> Result<()> {
 
 fn extract_track_info(path: &PathBuf) -> Result<(u32, String)> {
     let file_name = extract_file_name(path)?;
-    let space_idx = file_name.find(" ").ok_or(WavToFlacError::TaggingError(format!(
-        "Failed to find a space character in {:?}",
-        path
-    )))?;
+    let space_idx = file_name
+        .find(" ")
+        .ok_or(anyhow!("Failed to find a space character in {:?}", path))?;
     let (track_number, title) = file_name.split_at(space_idx);
-    let track_number: u32 = track_number.parse().map_err(|err| {
-        WavToFlacError::TaggingError(format!("Failed to extract track number from {:?}: {}", path, err))
-    })?;
+    let track_number: u32 = track_number
+        .parse()
+        .map_err(|err| anyhow!("Failed to extract track number from {:?}: {}", path, err))?;
     let title = title.trim().to_string();
     Ok((track_number, title))
 }
@@ -37,17 +36,11 @@ fn extract_track_info(path: &PathBuf) -> Result<(u32, String)> {
 fn extract_file_name(path: &PathBuf) -> Result<String> {
     path.file_stem()
         .and_then(|name| name.to_str().map(|name| name.to_string()))
-        .ok_or(WavToFlacError::TaggingError(format!(
-            "Failed to extract filename from {:?}",
-            path
-        )))
+        .ok_or(anyhow!("Failed to extract filename from {:?}", path))
 }
 
 fn parent_directory(path: &PathBuf) -> Result<PathBuf> {
     path.parent()
         .map(|path| path.to_path_buf())
-        .ok_or(WavToFlacError::TaggingError(format!(
-            "Failed to find parent directory for {:?}",
-            path
-        )))
+        .ok_or(anyhow!("Failed to find parent directory for {:?}", path))
 }

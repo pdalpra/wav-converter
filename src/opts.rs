@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use structopt::StructOpt;
 
-use crate::errors::{Result, WavToFlacError};
+use anyhow::*;
 use log::LevelFilter;
 
 #[derive(Debug, StructOpt)]
@@ -48,7 +48,7 @@ impl Opts {
         if directory.is_dir() {
             Ok(())
         } else {
-            Err(WavToFlacError::NotADirectory(directory.clone()))
+            Err(anyhow!("{:?} is not a directory", directory))
         }
     }
 }

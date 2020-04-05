@@ -1,11 +1,11 @@
 mod encoding;
-mod errors;
 mod files;
 mod opts;
 mod tagging;
 
-use crate::errors::{Result, WavToFlacError};
+use anyhow::*;
 use executors::{crossbeam_workstealing_pool, Executor};
+use indicatif::ProgressBar;
 use log::info;
 use opts::Opts;
 use std::sync::mpsc;
@@ -38,11 +38,12 @@ fn main() -> Result<()> {
         if let Some(err) = result.err() {
             info!("Error during conversion: {}", err)
         }
-        progress_bar.iter().for_each(|bar| bar.inc(1));
+        progress_bar.inc(1);
     }
 
-    progress_bar.iter().for_each(|bar| bar.finish());
-    pool.shutdown().map_err(WavToFlacError::ExecutorsError)?;
+    progress_bar.finish();
+    pool.shutdown()
+        .map_err(|err| anyhow!("Failed to shutdown executors pool: {}", err))?;
 
     if nb_jobs != 0 {
         info!(
@@ -64,10 +65,10 @@ fn setup_logger(opts: &Opts) {
         .init()
 }
 
-fn setup_progress_bar(opts: &Opts, nb_jobs: u64) -> Option<indicatif::ProgressBar> {
+fn setup_progress_bar(opts: &Opts, nb_jobs: u64) -> ProgressBar {
     if opts.quiet || nb_jobs == 0 {
-        None
+        ProgressBar::hidden()
     } else {
-        Some(indicatif::ProgressBar::new(nb_jobs))
+        ProgressBar::new(nb_jobs)
     }
 }
