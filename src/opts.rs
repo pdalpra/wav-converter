@@ -15,8 +15,13 @@ pub struct Opts {
     #[structopt(short, long)]
     pub debug: bool,
 
+    /// Set FLAC compression level
     #[structopt(short, long, default_value = "8")]
     pub compression: u8,
+
+    /// Enable dry-run
+    #[structopt(long)]
+    pub dry_run: bool,
 
     /// Input folder containing the WAV files to convert.
     #[structopt(parse(from_os_str))]
