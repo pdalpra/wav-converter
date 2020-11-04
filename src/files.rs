@@ -1,13 +1,14 @@
+use crate::encoding::Job;
+
+use std::fmt::Debug;
+use std::iter::FromIterator;
 use std::{error::Error, fs::File, io, path::PathBuf};
 
 use log::{debug, log_enabled, Level};
-
-use crate::encoding::Job;
-use std::fmt::Debug;
-use std::iter::FromIterator;
+use walkdir::WalkDir;
 
 pub fn find_files_to_encode(src: &PathBuf, dest: &PathBuf) -> Vec<Job> {
-    let file_walker = walkdir::WalkDir::new(src).follow_links(true);
+    let file_walker = WalkDir::new(src).follow_links(true);
     let (entries, walk_errors): (Vec<_>, Vec<_>) = partition_result(file_walker.into_iter());
     log_errors_if_any(walk_errors);
 
@@ -51,14 +52,14 @@ fn log_errors_if_any(errors: Vec<impl Error>) {
 
 fn partition_result<I, T, E, Successes, Errors>(iterable: I) -> (Successes, Errors)
 where
-    I: IntoIterator<Item = std::result::Result<T, E>>,
+    I: IntoIterator<Item = Result<T, E>>,
     T: Debug,
     E: Debug,
     Successes: FromIterator<T>,
     Errors: FromIterator<E>,
 {
     let (successes, failures): (Vec<_>, Vec<_>) = iterable.into_iter().partition(|e| e.is_ok());
-    let successes = successes.into_iter().map(std::result::Result::unwrap).collect();
-    let failures = failures.into_iter().map(std::result::Result::unwrap_err).collect();
+    let successes = successes.into_iter().map(Result::unwrap).collect();
+    let failures = failures.into_iter().map(Result::unwrap_err).collect();
     (successes, failures)
 }

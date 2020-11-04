@@ -3,13 +3,15 @@ mod files;
 mod opts;
 mod tagging;
 
+use crate::opts::Opts;
+
+use std::sync::mpsc;
+use std::time::Instant;
+
 use anyhow::*;
 use executors::{crossbeam_workstealing_pool, Executor};
 use indicatif::ProgressBar;
 use log::info;
-use opts::Opts;
-use std::sync::mpsc;
-use std::time::Instant;
 use structopt::StructOpt;
 
 fn main() -> Result<()> {

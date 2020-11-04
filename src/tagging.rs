@@ -1,6 +1,7 @@
+use std::path::PathBuf;
+
 use anyhow::*;
 use audiotags::{Album, Tag};
-use std::path::PathBuf;
 
 pub fn tag_file(target_path: &PathBuf) -> Result<()> {
     let parent = parent_directory(&target_path)?;

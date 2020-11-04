@@ -1,9 +1,11 @@
 use crate::tagging;
+
+use std::fs;
+use std::path::PathBuf;
+
 use anyhow::*;
 use flac_bound::{FlacEncoder, FlacEncoderConfig};
 use hound::{WavReader, WavSpec};
-use std::fs;
-use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct Job {

@@ -1,9 +1,8 @@
 use std::path::PathBuf;
 
-use structopt::StructOpt;
-
 use anyhow::*;
 use log::LevelFilter;
+use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 pub struct Opts {
