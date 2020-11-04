@@ -21,7 +21,8 @@ fn main() -> Result<()> {
     let compression = opts.compression;
 
     let progress_bar = setup_progress_bar(&opts, nb_jobs as u64);
-    let pool = crossbeam_workstealing_pool::small_pool(num_cpus::get());
+    let thread_pool_size = num_cpus::get();
+    let pool = crossbeam_workstealing_pool::dyn_pool(thread_pool_size);
 
     let (tx, rx) = mpsc::channel();
     let before_conversion_start = Instant::now();
