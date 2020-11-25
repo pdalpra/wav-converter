@@ -1,4 +1,4 @@
-use crate::encoding::Job;
+use crate::encoding::JobRequest;
 
 use std::fmt::Debug;
 use std::iter::FromIterator;
@@ -7,7 +7,7 @@ use std::{error::Error, fs::File, io, path::PathBuf};
 use log::{debug, log_enabled, Level};
 use walkdir::WalkDir;
 
-pub fn find_files_to_encode(src: &PathBuf, dest: &PathBuf) -> Vec<Job> {
+pub fn find_files_to_encode(src: &PathBuf, dest: &PathBuf) -> Vec<JobRequest> {
     let file_walker = WalkDir::new(src).follow_links(true);
     let (entries, walk_errors): (Vec<_>, Vec<_>) = partition_result(file_walker.into_iter());
     log_errors_if_any(walk_errors);
@@ -29,17 +29,18 @@ pub fn find_files_to_encode(src: &PathBuf, dest: &PathBuf) -> Vec<Job> {
     files_to_encode
 }
 
-fn build_encoding_job(wav_file: PathBuf, src: &PathBuf, dest: &PathBuf) -> Option<Job> {
+fn build_encoding_job(wav_file: PathBuf, src: &PathBuf, dest: &PathBuf) -> Option<JobRequest> {
     pathdiff::diff_paths(wav_file.as_path(), src)
         .map(|relative_path| dest.join(relative_path).with_extension("flac"))
         .filter(|flac_file| !flac_file.exists())
-        .map(|flac_file| Job::new(wav_file, flac_file))
+        .map(|flac_file| JobRequest::new(wav_file, flac_file))
 }
 
 fn detect_wav_file(dir_entry: walkdir::DirEntry) -> Result<Option<PathBuf>, io::Error> {
     let path = dir_entry.path();
     let file = &mut File::open(path)?;
-    Ok(hound::read_wave_header(file).ok().map(|_| path.to_path_buf()))
+    //Ok(hound::read_wave_header(file).ok().map(|_| path.to_path_buf()))
+    Ok(Some(path.to_path_buf()))
 }
 
 fn log_errors_if_any(errors: Vec<impl Error>) {

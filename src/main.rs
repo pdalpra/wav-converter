@@ -32,8 +32,7 @@ fn main() -> Result<()> {
     for file in jobs {
         let tx = tx.clone();
         pool.execute(move || {
-            tx.send(file.convert_to_flac(compression))
-                .expect("Channel should be available");
+            tx.send(file.convert("alac")).expect("Channel should be available");
         });
     }
 
@@ -61,6 +60,7 @@ fn main() -> Result<()> {
 }
 
 fn setup_logger(opts: &Opts) {
+    //ac_ffmpeg::set_log_callback(|_, _| ()); // Disable ffmpeg logging
     pretty_env_logger::formatted_builder()
         .filter(Some(module_path!()), opts.log_level())
         .format_module_path(false)

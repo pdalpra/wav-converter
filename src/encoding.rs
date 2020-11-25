@@ -3,72 +3,99 @@ use crate::tagging;
 use std::fs;
 use std::path::PathBuf;
 
+use ac_ffmpeg::codec::audio::{AudioTranscoder, ChannelLayout};
+use ac_ffmpeg::codec::{AudioCodecParameters, CodecParameters};
+use ac_ffmpeg::format::demuxer::{Demuxer, DemuxerWithCodecParameters};
+use ac_ffmpeg::format::io::IO;
+use ac_ffmpeg::format::muxer::{Muxer, OutputFormat};
 use anyhow::*;
-use flac_bound::{FlacEncoder, FlacEncoderConfig};
-use hound::{WavReader, WavSpec};
+use std::fs::{File, OpenOptions};
 
-#[derive(Debug)]
-pub struct Job {
+pub struct JobRequest {
     source_file: PathBuf,
     target_file: PathBuf,
 }
 
-impl Job {
+impl JobRequest {
     pub fn new(source_file: PathBuf, target_file: PathBuf) -> Self {
-        Job {
+        JobRequest {
             source_file,
             target_file,
         }
     }
 
-    pub fn convert_to_flac(&self, compression: u8) -> Result<()> {
+    pub fn convert(&self, codec: &str) -> Result<()> {
         if let Some(parent) = self.target_file.parent() {
             fs::create_dir_all(parent)?;
         }
-        let (spec, samples) = self.read_wav_file()?;
-        self.flac_encode(&spec, &samples, compression)?;
+
+        let mut demuxer = self.demux_from_file()?;
+        let input_params = demuxer
+            .codec_parameters()
+            .first()
+            .and_then(|raw_params| raw_params.clone().into_audio_codec_parameters())
+            .ok_or(anyhow!("Expected a single audio channel, but could not find it"))?;
+
+        let input_params = JobRequest::conversion_parameters(&input_params, "flac")?;
+        let output_params = JobRequest::conversion_parameters(&input_params, codec)?;
+        let mut transcoder = AudioTranscoder::builder(input_params, output_params.clone())?.build()?;
+
+        let mut muxer = self.mux_to_file(CodecParameters::from(output_params.clone()), codec)?;
+
+        // Push all source packets to the transcoder
+        while let Some(packet) = demuxer.take()? {
+            transcoder.push(packet)?;
+        }
+
+        // Push all transcoder packets to the output file
+        while let Some(packet) = transcoder.take()? {
+            muxer.push(packet)?;
+        }
+
         tagging::tag_file(&self.target_file)?;
 
         Ok(())
     }
 
-    fn read_wav_file(&self) -> Result<(WavSpec, Vec<i32>)> {
-        let mut reader = WavReader::open(&self.source_file)?;
-        let spec = reader.spec();
-        let samples = reader.samples().map(|s| s.unwrap()).collect::<Vec<i32>>();
-        Ok((spec, samples))
+    fn demux_from_file(&self) -> Result<DemuxerWithCodecParameters<File>> {
+        let file = File::open(&self.source_file)
+            .map_err(|err| anyhow!("Could not open file {:?}: {}", &self.source_file, err))?;
+
+        Demuxer::builder()
+            .build(IO::from_seekable_read_stream(file))?
+            .find_stream_info(None)
+            .map_err(|(_, err)| anyhow!("Could not demux WAV file {:?}: {}", &self.source_file, err))
     }
 
-    fn flac_encode(&self, spec: &WavSpec, samples: &[i32], compression: u8) -> Result<()> {
-        let nb_channels = spec.channels;
-        let encoder = FlacEncoder::new().ok_or(anyhow!("Failed to create a FLAC encoder"))?;
-        let mut encoder = Self::configure_encoder(encoder, &spec, compression)
-            .init_file(&self.target_file)
-            .map_err(|err| anyhow!("Error while initializing encoder: {:?}", err))?;
+    fn mux_to_file(&self, parameters: CodecParameters, codec: &str) -> Result<Muxer<File>> {
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&self.target_file)
+            .map_err(|err| anyhow!("Could not open file {:?}: {}", &self.target_file, err))?;
 
-        let mut channels: Vec<Vec<i32>> = vec![Vec::new(); nb_channels as usize];
-        for (index, sample) in samples.iter().enumerate() {
-            channels[index % (nb_channels as usize)].push(*sample);
-        }
-        let mut channel_slices = Vec::with_capacity(nb_channels as usize);
-        channels.iter().for_each(|channel| channel_slices.push(&channel[..]));
+        let output_format = OutputFormat::find_by_name(codec).unwrap();
 
-        (&mut encoder)
-            .process(&channel_slices)
-            .map_err(|_| anyhow!("Error during FLAC encoding: {:?}", encoder.state()))?;
+        let mut muxer = Muxer::builder();
+        muxer.add_stream(&parameters)?;
 
-        encoder
-            .finish()
-            .map_err(|encoder| anyhow!("Failed to finish FLAC encoding: {:?}", encoder.state()))?;
-        Ok(())
+        muxer
+            .build(IO::from_seekable_write_stream(file), output_format)
+            .map_err(|err| anyhow!("Could not open muxer for {:?}: {}", &self.target_file, err))
     }
 
-    fn configure_encoder(encoder: FlacEncoderConfig, spec: &WavSpec, compression: u8) -> FlacEncoderConfig {
-        encoder
-            .compression_level(compression as u32)
-            .sample_rate(spec.sample_rate)
-            .bits_per_sample(spec.bits_per_sample as u32)
-            .channels(spec.channels as u32)
-            .verify(true)
+    fn conversion_parameters(
+        input_codec_parameters: &AudioCodecParameters,
+        codec: &str,
+    ) -> Result<AudioCodecParameters> {
+        let audio_parameters = AudioCodecParameters::builder(codec)?
+            .sample_rate(input_codec_parameters.sample_rate())
+            .sample_format(input_codec_parameters.sample_format())
+            .channel_layout(ChannelLayout::from_channels(2).unwrap())
+            .build();
+
+        Ok(audio_parameters)
     }
 }
