@@ -16,6 +16,7 @@ use structopt::StructOpt;
 
 fn main() -> Result<()> {
     let opts: Opts = Opts::from_args().validate()?;
+    let debug = opts.debug;
     setup_logger(&opts);
 
     let jobs = files::find_files_to_encode(&opts.src, &opts.dest);
@@ -32,7 +33,7 @@ fn main() -> Result<()> {
     for file in jobs {
         let tx = tx.clone();
         pool.execute(move || {
-            tx.send(file.convert_to_flac(compression))
+            tx.send(file.convert_to_flac(debug, compression))
                 .expect("Channel should be available");
         });
     }

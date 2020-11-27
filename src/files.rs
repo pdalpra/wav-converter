@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::iter::FromIterator;
 use std::{error::Error, fs::File, io, path::PathBuf};
 
-use log::{debug, log_enabled, Level};
+use log::{debug, info, log_enabled, Level};
 use walkdir::WalkDir;
 
 pub fn find_files_to_encode(src: &PathBuf, dest: &PathBuf) -> Vec<Job> {
@@ -17,14 +17,14 @@ pub fn find_files_to_encode(src: &PathBuf, dest: &PathBuf) -> Vec<Job> {
     log_errors_if_any(wav_detection_errors);
 
     let wav_files: Vec<_> = wav_files.into_iter().flatten().collect();
-    debug!("Found {} WAV files in {}", wav_files.len(), src.to_string_lossy());
+    info!("Found {} WAV files in {}", wav_files.len(), src.to_string_lossy());
 
     let files_to_encode: Vec<_> = wav_files
         .into_iter()
         .flat_map(|wav_file| build_encoding_job(wav_file, src, dest))
         .collect();
 
-    debug!("Found {} missing files to encode", files_to_encode.len());
+    info!("Found {} missing files to encode", files_to_encode.len());
 
     files_to_encode
 }
