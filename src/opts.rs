@@ -34,7 +34,6 @@ pub struct Opts {
 impl Opts {
     pub fn validate(self) -> Result<Self> {
         Self::validate_directory(&self.src)?;
-        Self::validate_directory(&self.dest)?;
         Ok(self)
     }
 
