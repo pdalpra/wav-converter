@@ -15,7 +15,7 @@ pub struct Opts {
     pub debug: bool,
 
     /// Set FLAC compression level
-    #[structopt(short, long, default_value = "8")]
+    #[structopt(short, long, default_value = "4")]
     pub compression: u8,
 
     /// Enable dry-run
