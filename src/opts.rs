@@ -13,7 +13,7 @@ pub struct Opts {
     pub quiet: bool,
 
     /// Enable debug logs
-    #[structopt(short, long)]
+    #[structopt(short, long, conflicts_with("quiet"))]
     pub debug: bool,
 
     #[structopt(short, long, default_value = "flac")]
