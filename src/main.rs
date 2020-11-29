@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use anyhow::*;
 use executors::{crossbeam_workstealing_pool, Executor};
-use indicatif::ProgressBar;
+use indicatif::{FormattedDuration, ProgressBar, ProgressStyle};
 use log::info;
 use structopt::StructOpt;
 
@@ -53,7 +53,7 @@ fn main() -> Result<()> {
     if nb_files != 0 {
         info!(
             "Conversion completed in {}s.",
-            before_conversion_start.elapsed().as_secs()
+            FormattedDuration(before_conversion_start.elapsed())
         );
     } else {
         info!(
@@ -78,6 +78,9 @@ fn setup_progress_bar(opts: &Flags, nb_files: u64) -> ProgressBar {
     if opts.quiet || nb_files == 0 {
         ProgressBar::hidden()
     } else {
-        ProgressBar::new(nb_files)
+        let progress_style = ProgressStyle::default_bar()
+            .template("{pos}/{len} [{bar:60.cyan/blue}] {percent}% (eta: {eta})")
+            .progress_chars("#>-");
+        ProgressBar::new(nb_files).with_style(progress_style)
     }
 }
