@@ -1,7 +1,9 @@
+use crate::format::Format;
+
 use std::path::PathBuf;
 
 use anyhow::*;
-use log::LevelFilter;
+use log::{debug, LevelFilter};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -14,9 +16,12 @@ pub struct Opts {
     #[structopt(short, long)]
     pub debug: bool,
 
+    #[structopt(short, long, default_value = "flac")]
+    pub format: Format,
+
     /// Set FLAC compression level
-    #[structopt(short, long, default_value = "4")]
-    pub compression: u8,
+    #[structopt(short, long)]
+    pub compression: Option<u8>,
 
     /// Enable dry-run
     #[structopt(long)]
@@ -34,6 +39,15 @@ pub struct Opts {
 impl Opts {
     pub fn validate(self) -> Result<Self> {
         Self::validate_directory(&self.src)?;
+        if self.format != Format::Flac {
+            if let Some(compression) = &self.compression {
+                debug!(
+                    "Ignoring compression level ({}): not supported by {}",
+                    compression,
+                    self.format.codec_name()
+                )
+            }
+        }
         Ok(self)
     }
 

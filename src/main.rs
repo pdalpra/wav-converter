@@ -1,8 +1,10 @@
 mod encoding;
 mod files;
+mod format;
 mod opts;
 mod tagging;
 
+use crate::format::Format;
 use crate::opts::Opts;
 
 use std::sync::mpsc;
@@ -17,11 +19,12 @@ use structopt::StructOpt;
 fn main() -> Result<()> {
     let opts: Opts = Opts::from_args().validate()?;
     let debug = opts.debug;
+    let compression = opts.compression.unwrap_or(Format::DEFAULT_FLAC_COMPRESSION);
+
     setup_logger(&opts);
 
-    let jobs = files::find_files_to_encode(&opts.src, &opts.dest);
+    let jobs = files::find_files_to_encode(&opts.src, &opts.dest, opts.format, compression);
     let nb_jobs = jobs.len();
-    let compression = opts.compression;
 
     let progress_bar = setup_progress_bar(&opts, nb_jobs as u64);
     let thread_pool_size = num_cpus::get();
@@ -33,8 +36,7 @@ fn main() -> Result<()> {
     for file in jobs {
         let tx = tx.clone();
         pool.execute(move || {
-            tx.send(file.convert_to_flac(debug, compression))
-                .expect("Channel should be available");
+            tx.send(file.convert(debug)).expect("Channel should be available");
         });
     }
 

@@ -1,6 +1,6 @@
 [package]
-name = "wav-to-flac"
-description = "CLI tool to convert WAV files to FLAC"
+name = "wav-converter"
+description = "CLI tool to convert WAV files to various formats"
 version = "0.1.0"
 authors = ["Pierre Dal-Pra <dalpra.pierre@gmail.com>"]
 categories = ["cli"]
