@@ -17,7 +17,7 @@ pub fn tag_file(target_path: &PathBuf) -> Result<()> {
 
     let path_as_str = target_path
         .to_str()
-        .ok_or(anyhow!("Failed to convert {:?} to a string"))?;
+        .ok_or_else(|| anyhow!("Failed to convert {:?} to a string"))?;
     tag.write_to_path(path_as_str)?;
 
     Ok(())
@@ -26,8 +26,8 @@ pub fn tag_file(target_path: &PathBuf) -> Result<()> {
 fn extract_track_info(path: &PathBuf) -> Result<(u16, String)> {
     let file_name = extract_file_name(path)?;
     let space_idx = file_name
-        .find(" ")
-        .ok_or(anyhow!("Failed to find a space character in {:?}", path))?;
+        .find(' ')
+        .ok_or_else(|| anyhow!("Failed to find a space character in {:?}", path))?;
     let (track_number, title) = file_name.split_at(space_idx);
     let track_number: u16 = track_number
         .parse()
@@ -39,11 +39,11 @@ fn extract_track_info(path: &PathBuf) -> Result<(u16, String)> {
 fn extract_file_name(path: &PathBuf) -> Result<String> {
     path.file_stem()
         .and_then(|name| name.to_str().map(|name| name.to_string()))
-        .ok_or(anyhow!("Failed to extract filename from {:?}", path))
+        .ok_or_else(|| anyhow!("Failed to extract filename from {:?}", path))
 }
 
 fn parent_directory(path: &PathBuf) -> Result<PathBuf> {
     path.parent()
         .map(|path| path.to_path_buf())
-        .ok_or(anyhow!("Failed to find parent directory for {:?}", path))
+        .ok_or_else(|| anyhow!("Failed to find parent directory for {:?}", path))
 }
