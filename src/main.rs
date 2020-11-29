@@ -1,13 +1,12 @@
 mod encoding;
 mod files;
+mod flags;
 mod format;
-mod opts;
 mod tagging;
 
-use crate::format::Format;
-use crate::opts::Opts;
+use crate::flags::Flags;
 
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::time::Instant;
 
 use anyhow::*;
@@ -17,53 +16,57 @@ use log::info;
 use structopt::StructOpt;
 
 fn main() -> Result<()> {
-    let opts: Opts = Opts::from_args().validate()?;
-    let debug = opts.debug;
-    let compression = opts.compression.unwrap_or(Format::DEFAULT_FLAC_COMPRESSION);
+    let flags = Flags::from_args().validate()?;
+    let debug = flags.debug;
+    let encoding_options = Arc::new(flags.encoding_options());
 
-    setup_logger(&opts);
+    setup_logger(&flags);
 
-    let jobs = files::find_files_to_encode(&opts.src, &opts.dest, opts.format, compression);
-    let nb_jobs = jobs.len();
+    let files_to_convert = files::find_files_to_convert(&flags.src, &flags.dest, encoding_options.format.extension());
+    let nb_files = files_to_convert.len();
 
-    let progress_bar = setup_progress_bar(&opts, nb_jobs as u64);
+    let progress_bar = setup_progress_bar(&flags, nb_files as u64);
     let thread_pool_size = num_cpus::get();
     let pool = crossbeam_workstealing_pool::dyn_pool(thread_pool_size);
 
     let (tx, rx) = mpsc::channel();
     let before_conversion_start = Instant::now();
 
-    for file in jobs {
+    for file in files_to_convert {
+        let encoding_options = Arc::clone(&encoding_options);
         let tx = tx.clone();
         pool.execute(move || {
-            tx.send(file.convert(debug)).expect("Channel should be available");
+            tx.send(file.convert(&encoding_options, debug))
+                .expect("Channel should be available");
         });
     }
 
-    for result in rx.iter().take(nb_jobs) {
-        if let Some(err) = result.err() {
+    for conversion_result in rx.into_iter().take(nb_files) {
+        if let Some(err) = conversion_result.err() {
             info!("Error during conversion: {}", err)
         }
         progress_bar.inc(1);
     }
 
     progress_bar.finish();
-    pool.shutdown()
-        .map_err(|err| anyhow!("Failed to shutdown executors pool: {}", err))?;
 
-    if nb_jobs != 0 {
+    if nb_files != 0 {
         info!(
             "Conversion completed in {}s.",
             before_conversion_start.elapsed().as_secs()
         );
     } else {
-        info!("All files are already converted to FLAC.")
+        info!(
+            "All files are already converted to {}.",
+            encoding_options.format.codec_name().to_uppercase()
+        )
     }
 
-    Ok(())
+    pool.shutdown()
+        .map_err(|err| anyhow!("Failed to shutdown executors pool: {}", err))
 }
 
-fn setup_logger(opts: &Opts) {
+fn setup_logger(opts: &Flags) {
     pretty_env_logger::formatted_builder()
         .filter(Some(module_path!()), opts.log_level())
         .format_module_path(false)
@@ -71,10 +74,10 @@ fn setup_logger(opts: &Opts) {
         .init()
 }
 
-fn setup_progress_bar(opts: &Opts, nb_jobs: u64) -> ProgressBar {
-    if opts.quiet || nb_jobs == 0 {
+fn setup_progress_bar(opts: &Flags, nb_files: u64) -> ProgressBar {
+    if opts.quiet || nb_files == 0 {
         ProgressBar::hidden()
     } else {
-        ProgressBar::new(nb_jobs)
+        ProgressBar::new(nb_files)
     }
 }

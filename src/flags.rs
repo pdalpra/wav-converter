@@ -7,7 +7,7 @@ use log::{debug, LevelFilter};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
-pub struct Opts {
+pub struct Flags {
     /// Silence all output
     #[structopt(short, long)]
     pub quiet: bool,
@@ -36,7 +36,12 @@ pub struct Opts {
     pub dest: PathBuf,
 }
 
-impl Opts {
+pub struct EncodingOptions {
+    pub format: Format,
+    pub compression: u8,
+}
+
+impl Flags {
     pub fn validate(self) -> Result<Self> {
         Self::validate_directory(&self.src)?;
         if self.format != Format::Flac {
@@ -58,6 +63,13 @@ impl Opts {
             LevelFilter::Debug
         } else {
             LevelFilter::Info
+        }
+    }
+
+    pub fn encoding_options(&self) -> EncodingOptions {
+        EncodingOptions {
+            format: self.format,
+            compression: self.compression.unwrap_or(Format::DEFAULT_FLAC_COMPRESSION),
         }
     }
 
