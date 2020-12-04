@@ -1,9 +1,10 @@
+use std::fs;
 use std::path::PathBuf;
 
 use anyhow::*;
-use audiotags::{Album, Tag};
+use audiotags::{Album, MimeType, Picture, Tag};
 
-pub fn tag_file(target_path: &PathBuf) -> Result<()> {
+pub fn tag_file(target_path: &PathBuf, cover_path: Option<PathBuf>) -> Result<()> {
     let parent = parent_directory(&target_path)?;
     let parent_parent = parent_directory(&parent)?;
     let album = extract_file_name(&parent)?;
@@ -15,9 +16,17 @@ pub fn tag_file(target_path: &PathBuf) -> Result<()> {
     tag.set_title(&title);
     tag.set_track_number(track_number);
 
-    let path_as_str = target_path
-        .to_str()
-        .ok_or_else(|| anyhow!("Failed to convert {:?} to a string"))?;
+    if let Some(cover_path) = cover_path {
+        let mime_type = cover_mime_type(&cover_path)?;
+        let cover_bytes = fs::read(&cover_path)?;
+        let picture = Picture {
+            data: &cover_bytes,
+            mime_type,
+        };
+        tag.set_album_cover(picture)
+    }
+
+    let path_as_str = target_path.to_str().ok_or_else(|| anyhow!("Failed to convert {:?} to a string"))?;
     tag.write_to_path(path_as_str)?;
 
     Ok(())
@@ -46,4 +55,20 @@ fn parent_directory(path: &PathBuf) -> Result<PathBuf> {
     path.parent()
         .map(|path| path.to_path_buf())
         .ok_or_else(|| anyhow!("Failed to find parent directory for {:?}", path))
+}
+
+fn cover_mime_type(cover_path: &PathBuf) -> Result<MimeType> {
+    let extension = cover_path
+        .extension()
+        .and_then(|os_string| os_string.to_str())
+        .ok_or_else(|| anyhow!("Could not extract extension from {:?}", cover_path))?;
+
+    match extension {
+        "jpg" => Ok(MimeType::Jpeg),
+        "bmp" => Ok(MimeType::Bmp),
+        "gif" => Ok(MimeType::Gif),
+        "png" => Ok(MimeType::Png),
+        "tiff" => Ok(MimeType::Tiff),
+        _ => Err(anyhow!("Unsupported extension: {}", extension)),
+    }
 }

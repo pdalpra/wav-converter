@@ -19,6 +19,9 @@ pub struct Flags {
     #[structopt(short, long, default_value = "flac")]
     pub format: Format,
 
+    #[structopt(long, default_value = "cover.jpg")]
+    pub cover: String,
+
     /// Set FLAC compression level
     #[structopt(short, long)]
     pub compression: Option<u8>,

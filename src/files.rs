@@ -1,55 +1,96 @@
-use crate::encoding::FileToConvert;
-
+use std::collections::HashSet;
 use std::fmt::Debug;
+use std::fs;
+use std::io;
 use std::iter::FromIterator;
-use std::{error::Error, fs::File, path::PathBuf};
+use std::path::{Path, PathBuf};
+use std::{error::Error, fs::File};
 
-use log::{debug, info, log_enabled, Level};
+use anyhow::Result;
 use walkdir::{DirEntry, WalkDir};
 
-pub fn find_files_to_convert(src: &PathBuf, dest: &PathBuf, target_extension: &str) -> Vec<FileToConvert> {
-    let file_walker = WalkDir::new(src);
-    let (dir_entries, walk_errors): (Vec<DirEntry>, Vec<_>) = partition_result(file_walker.into_iter());
-    log_errors_if_any(walk_errors);
+pub fn find_audio_files_and_covers(
+    src_root: &PathBuf,
+    dest_root: &PathBuf,
+    target_extension: &str,
+    cover_name: &str,
+) -> (Vec<FileMapping>, Vec<FileMapping>) {
+    let (dir_entries, errors): (Vec<DirEntry>, Vec<walkdir::Error>) = partition_result(WalkDir::new(src_root));
+    log_errors_if_any(errors);
 
-    let detected_wav_files = dir_entries.into_iter().map(detect_wav_file);
-    let (wav_files, wav_detection_errors): (Vec<PathBuf>, Vec<_>) = partition_result(detected_wav_files);
-    log_errors_if_any(wav_detection_errors);
+    let mut wav_files: Vec<PathBuf> = vec![];
+    let mut cover_files: Vec<PathBuf> = vec![];
 
-    info!("Found {} WAV files in {}", wav_files.len(), src.to_string_lossy());
+    for entry in dir_entries {
+        let path = entry.path();
+        if is_valid_wav_file(path) {
+            wav_files.push(path.to_path_buf());
+        } else if entry.file_name() == cover_name {
+            cover_files.push(path.to_path_buf());
+        }
+    }
 
-    let files_to_encode: Vec<FileToConvert> = wav_files
+    log::info!("Found {} WAV files in {}", wav_files.len(), src_root.to_string_lossy());
+
+    let audio_file_mappings: Vec<FileMapping> = wav_files
         .into_iter()
-        .flat_map(|wav_file| convert_if_missing(wav_file, src, dest, target_extension))
+        .flat_map(|path| {
+            on_missing_file(&path, src_root, dest_root, |target_path| {
+                target_path.with_extension(target_extension)
+            })
+        })
         .collect();
 
-    info!("Found {} missing files to encode", files_to_encode.len());
+    log::info!("Found {} missing files to encode", audio_file_mappings.len());
 
-    files_to_encode
+    let cover_file_mappings: Vec<FileMapping> = cover_files
+        .into_iter()
+        .flat_map(|path| on_missing_file(&path, src_root, dest_root, std::convert::identity))
+        .collect();
+
+    log::info!("Found {} missing covers to copy", cover_file_mappings.len());
+
+    (audio_file_mappings, cover_file_mappings)
 }
 
-fn convert_if_missing(
-    wav_file: PathBuf,
-    src: &PathBuf,
-    dest: &PathBuf,
-    target_extension: &str,
-) -> Option<FileToConvert> {
-    pathdiff::diff_paths(wav_file.as_path(), src)
-        .map(|relative_path| dest.join(relative_path).with_extension(target_extension))
-        .filter(|converted_file_path| !converted_file_path.exists())
-        .map(|converted_file_path| FileToConvert::new(wav_file, converted_file_path))
+pub fn create_directories(mappings: &[FileMapping]) -> Result<()> {
+    let parents: HashSet<&Path> = mappings.iter().flat_map(|file| file.target_file.parent()).collect();
+
+    let (_, errors): (Vec<_>, Vec<io::Error>) = partition_result(parents.iter().map(fs::create_dir_all));
+    log_errors_if_any(errors);
+
+    Ok(())
 }
 
-fn detect_wav_file(dir_entry: walkdir::DirEntry) -> Result<PathBuf, hound::Error> {
-    let path = dir_entry.path();
-    let file = &mut File::open(path)?;
-    hound::read_wave_header(file).map(|_| path.to_path_buf())
+pub fn copy_covers(covers: &[FileMapping]) -> Result<()> {
+    let (_, errors): (Vec<_>, Vec<io::Error>) =
+        partition_result(covers.iter().map(|mapping| fs::copy(&mapping.source_file, &mapping.target_file)));
+
+    log_errors_if_any(errors);
+
+    Ok(())
+}
+
+fn on_missing_file<F>(source_file: &Path, src_root: &PathBuf, dest_root: &Path, map_file_name: F) -> Option<FileMapping>
+where
+    F: FnOnce(PathBuf) -> PathBuf,
+{
+    pathdiff::diff_paths(source_file, src_root)
+        .map(|relative_path| map_file_name(dest_root.join(relative_path)))
+        .filter(|target_path| !target_path.exists())
+        .map(|target_path| FileMapping::new(source_file.to_path_buf(), target_path))
+}
+
+fn is_valid_wav_file(path: &Path) -> bool {
+    File::open(path)
+        .map(|mut file| hound::read_wave_header(&mut file).is_ok())
+        .unwrap_or(false)
 }
 
 fn log_errors_if_any(errors: Vec<impl Error>) {
-    if log_enabled!(Level::Debug) {
+    if log::log_enabled!(log::Level::Debug) {
         for error in &errors {
-            debug!("Ignoring file, cause: {}", error)
+            log::debug!("Ignoring file, cause: {}", error)
         }
     }
 }
@@ -66,4 +107,15 @@ where
     let successes = successes.into_iter().map(Result::unwrap).collect();
     let failures = failures.into_iter().map(Result::unwrap_err).collect();
     (successes, failures)
+}
+
+pub struct FileMapping {
+    pub source_file: PathBuf,
+    pub target_file: PathBuf,
+}
+
+impl FileMapping {
+    pub fn new(source_file: PathBuf, target_file: PathBuf) -> Self {
+        FileMapping { source_file, target_file }
+    }
 }
