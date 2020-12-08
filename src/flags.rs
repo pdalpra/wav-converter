@@ -26,6 +26,10 @@ pub struct Flags {
     #[structopt(short, long)]
     pub compression: Option<u8>,
 
+    /// Force converted files sample rates
+    #[structopt(long)]
+    pub sample_rate: Option<u32>,
+
     /// Enable dry-run
     #[structopt(long)]
     pub dry_run: bool,
@@ -42,6 +46,7 @@ pub struct Flags {
 pub struct EncodingOptions {
     pub format: Format,
     pub compression: u8,
+    pub sample_rate: Option<u32>,
 }
 
 impl Flags {
@@ -73,6 +78,7 @@ impl Flags {
         EncodingOptions {
             format: self.format,
             compression: self.compression.unwrap_or(Format::DEFAULT_FLAC_COMPRESSION),
+            sample_rate: self.sample_rate,
         }
     }
 

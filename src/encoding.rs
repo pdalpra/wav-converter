@@ -32,8 +32,7 @@ fn encode(mapping: &FileMapping, encoding_options: &EncodingOptions, debug: bool
     cmd.arg("-i")
         .arg(&mapping.source_file)
         .args(&["-map_metadata", "-1"])
-        .args(&["-c:a", &encoding_options.format.codec_name()])
-        .args(format_specific_options(encoding_options))
+        .args(encoding_arguments(encoding_options))
         .arg(&mapping.target_file);
 
     let status_code = &cmd.status().map_err(|err| anyhow!("Error while running ffmpeg: {:?}", err))?;
@@ -48,9 +47,17 @@ fn encode(mapping: &FileMapping, encoding_options: &EncodingOptions, debug: bool
     }
 }
 
-fn format_specific_options(encoding_options: &EncodingOptions) -> Vec<String> {
-    match encoding_options.format {
+fn encoding_arguments(encoding_options: &EncodingOptions) -> Vec<String> {
+    let mut arguments = vec!["-c:a".to_string(), encoding_options.format.codec_name().to_string()];
+
+    if let Some(sample_rate) = encoding_options.sample_rate {
+        arguments.append(&mut vec!["-ar".to_string(), sample_rate.to_string()]);
+    }
+
+    let mut format_specific = match encoding_options.format {
         Format::Flac => vec!["-compression_level".to_string(), encoding_options.compression.to_string()],
         Format::Alac => vec![],
-    }
+    };
+    arguments.append(&mut format_specific);
+    arguments
 }
